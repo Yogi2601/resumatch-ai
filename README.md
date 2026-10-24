@@ -58,7 +58,7 @@
 ### Prerequisites
 - Node.js >= 20.x
 - npm or pnpm
-- Google Gemini API Key (from [Google AI Studio](https://aistudio.google.com/))
+- Google Gemini API Key 
 
 ### Installation
 
