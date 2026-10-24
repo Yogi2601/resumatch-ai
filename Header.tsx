@@ -11,8 +11,15 @@ import {
   HelpCircle,
   BarChart3,
   SlidersHorizontal,
+  FileText,
+  LogIn,
+  LogOut,
+  Shield,
+  User as UserIcon,
+  Home,
 } from 'lucide-react';
 import { SAMPLE_PRESETS } from '../data/samplePresets.ts';
+import type { User } from '../types.ts';
 
 interface HeaderProps {
   activeTab: 'analyzer' | 'keywords' | 'audits' | 'bulletImprover' | 'editor' | 'coverLetter' | 'interviewPrep';
@@ -20,9 +27,16 @@ interface HeaderProps {
   onLoadPreset: (presetId: string) => void;
   onReset: () => void;
   onOpenHistory: () => void;
+  onOpenProjectReport: () => void;
   onPrintReport: () => void;
   hasAnalysis: boolean;
   historyCount: number;
+  currentUser: User | null;
+  onOpenAuth: (mode?: 'login' | 'signup') => void;
+  onLogout: () => void;
+  onOpenAdmin: () => void;
+  isAdminOpen: boolean;
+  onGoToHome?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,9 +45,16 @@ export const Header: React.FC<HeaderProps> = ({
   onLoadPreset,
   onReset,
   onOpenHistory,
+  onOpenProjectReport,
   onPrintReport,
   hasAnalysis,
   historyCount,
+  currentUser,
+  onOpenAuth,
+  onLogout,
+  onOpenAdmin,
+  isAdminOpen,
+  onGoToHome,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-indigo-100/80 text-slate-900 print:hidden shadow-xs">
@@ -43,8 +64,18 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo & Brand */}
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab('analyzer')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 p-0.5 shadow-md shadow-indigo-500/25 flex items-center justify-center">
+          <div
+            className="flex items-center space-x-3 cursor-pointer group"
+            onClick={() => {
+              if (onGoToHome) {
+                onGoToHome();
+              } else {
+                setActiveTab('analyzer');
+              }
+            }}
+            title="ResuMatch AI - Return to Homepage or ATS view"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 p-0.5 shadow-md shadow-indigo-500/25 flex items-center justify-center transition group-hover:scale-105">
               <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
                 <FileCheck2 className="w-5 h-5 text-indigo-600" />
               </div>
@@ -65,17 +96,29 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Quick Preset Selector & Utility Actions */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-2.5">
+            {/* Return to Landing Page */}
+            {onGoToHome && (
+              <button
+                type="button"
+                onClick={onGoToHome}
+                className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 transition shadow-2xs"
+                title="Return to Public Homepage"
+              >
+                <Home className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden sm:inline">Home</span>
+              </button>
+            )}
+
             {/* Sample Presets Dropdown */}
-            <div className="relative group">
+            <div className="relative group hidden sm:block">
               <button
                 type="button"
                 className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-900 rounded-lg border border-amber-200 transition shadow-2xs"
                 title="Load a pre-configured sample resume & job description"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span className="hidden md:inline">Try Demo Sample</span>
-                <span className="md:hidden">Demo</span>
+                <span>Demo Preset</span>
               </button>
               <div className="absolute right-0 mt-2 w-64 bg-white border border-indigo-100 rounded-xl shadow-xl py-2 hidden group-hover:block group-focus-within:block z-50">
                 <div className="px-3 py-1.5 text-[11px] font-bold text-indigo-900/60 uppercase tracking-wider border-b border-slate-100">
@@ -94,14 +137,14 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* History Button */}
+            {/* History Button (isolated to user when authenticated) */}
             <button
               onClick={onOpenHistory}
               className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 transition shadow-2xs"
-              title="View saved past analyses"
+              title="View your saved past resume analyses"
             >
               <History className="w-3.5 h-3.5 text-indigo-500" />
-              <span className="hidden sm:inline">History</span>
+              <span className="hidden md:inline">History</span>
               {historyCount > 0 && (
                 <span className="px-1.5 py-0.2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-[10px] rounded-full font-bold shadow-2xs">
                   {historyCount}
@@ -109,22 +152,92 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
+            {/* Project Report Showcase Button */}
+            <button
+              onClick={onOpenProjectReport}
+              className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-slate-100 to-indigo-50 hover:from-slate-200 hover:to-indigo-100 text-slate-700 rounded-lg border border-slate-200 transition"
+              title="View full project report & architecture documentation"
+            >
+              <FileText className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Report</span>
+            </button>
+
             {/* Print / Export Report Button */}
             {hasAnalysis && (
               <button
                 onClick={onPrintReport}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-bold bg-gradient-to-r from-indigo-600 via-blue-600 to-teal-500 hover:from-indigo-700 hover:to-teal-600 text-white rounded-lg shadow-md shadow-indigo-500/25 transition active:scale-[0.98]"
+                className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-indigo-600 via-blue-600 to-teal-500 hover:from-indigo-700 hover:to-teal-600 text-white rounded-lg shadow-sm shadow-indigo-500/20 transition active:scale-[0.98]"
                 title="Print or export complete ATS Audit Report as PDF"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Export PDF</span>
+                <span>PDF</span>
               </button>
+            )}
+
+            {/* AUTHENTICATION CONTROLS */}
+            {currentUser ? (
+              <div className="flex items-center space-x-2">
+                {/* User Profile Pill */}
+                <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-indigo-50/80 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900 shadow-2xs">
+                  <div className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center text-[10px]">
+                    {currentUser.fullName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="max-w-[100px] truncate hidden xl:inline">
+                    {currentUser.fullName}
+                  </span>
+                  <span className="text-[10px] text-indigo-500 font-mono">
+                    @{currentUser.username}
+                  </span>
+                </div>
+
+                {/* Admin Dashboard Button (ONLY if role === 'admin') */}
+                {currentUser.role === 'admin' && (
+                  <button
+                    onClick={onOpenAdmin}
+                    className={`flex items-center space-x-1 px-3 py-1.5 text-xs font-bold rounded-lg border transition shadow-sm ${
+                      isAdminOpen
+                        ? 'bg-purple-700 text-white border-purple-800'
+                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white border-purple-600'
+                    }`}
+                    title="Open Administrator Console"
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Admin</span>
+                  </button>
+                )}
+
+                {/* Logout Button */}
+                <button
+                  onClick={onLogout}
+                  className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                  title="Sign out of your account"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={() => onOpenAuth('login')}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition flex items-center gap-1"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign In</span>
+                </button>
+
+                <button
+                  onClick={() => onOpenAuth('signup')}
+                  className="px-3.5 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg shadow-sm shadow-indigo-500/25 transition active:scale-[0.98]"
+                >
+                  Sign Up
+                </button>
+              </div>
             )}
 
             {/* Reset Button */}
             <button
               onClick={onReset}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
               title="Reset all fields"
             >
               <RotateCcw className="w-4 h-4" />
@@ -132,7 +245,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs Bar with colorful icons */}
+        {/* Navigation Tabs Bar */}
         <div className="flex space-x-1.5 overflow-x-auto no-scrollbar border-t border-slate-100 py-2 text-xs">
           <button
             onClick={() => setActiveTab('analyzer')}

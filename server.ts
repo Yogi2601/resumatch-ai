@@ -9,11 +9,31 @@ import {
   generateCoverLetterAlgorithmic,
   generateInterviewPrepAlgorithmic,
 } from './src/server/atsEngine.ts';
+import { initDb, saveAnalysis } from './src/server/db.ts';
+import {
+  handleSignup,
+  handleLogin,
+  handleGetMe,
+  authMiddleware,
+  requireAdmin,
+  optionalAuthMiddleware,
+  handleGetUserAnalyses,
+  handleSaveUserAnalysis,
+  handleDeleteUserAnalysis,
+  handleClearUserAnalyses,
+  handleGetAdminOverview,
+  handleAdminUpdateRole,
+  handleAdminDeleteUser,
+  AuthenticatedRequest,
+} from './src/server/auth.ts';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize DB and ensure admin account is securely seeded
+initDb();
 
 const app = express();
 // Environment constraint: dev server must run on port 3000
@@ -47,8 +67,36 @@ async function callGeminiWithTimeout(contents: any, config: any = {}, timeoutMs 
   return response.text || '';
 }
 
+// ==========================================
+// AUTHENTICATION & USER MANAGEMENT ENDPOINTS
+// ==========================================
+
+// 1. Sign Up (Full name, unique username, email, password, confirmPassword)
+app.post('/api/auth/signup', handleSignup);
+
+// 2. Login (Username OR Email + Password)
+app.post('/api/auth/login', handleLogin);
+
+// 3. Current User Profile
+app.get('/api/auth/me', authMiddleware, handleGetMe);
+
+// 4. User-Isolated Reports & History Endpoints (Requirement 5)
+app.get('/api/user/analyses', authMiddleware, handleGetUserAnalyses);
+app.post('/api/user/analyses', authMiddleware, handleSaveUserAnalysis);
+app.delete('/api/user/analyses/:id', authMiddleware, handleDeleteUserAnalysis);
+app.delete('/api/user/analyses', authMiddleware, handleClearUserAnalyses);
+
+// 5. Admin-Only Dashboard & Management Endpoints (Requirement 4 & 5)
+app.get('/api/admin/overview', authMiddleware, requireAdmin, handleGetAdminOverview);
+app.post('/api/admin/users/:id/role', authMiddleware, requireAdmin, handleAdminUpdateRole);
+app.delete('/api/admin/users/:id', authMiddleware, requireAdmin, handleAdminDeleteUser);
+
+// ==========================================
+// RESUMATCH AI RESUME ANALYSIS ENDPOINTS
+// ==========================================
+
 // 1. Full ATS & Job Description Analysis
-app.post('/api/analyze-resume', async (req, res) => {
+app.post('/api/analyze-resume', optionalAuthMiddleware, async (req: AuthenticatedRequest, res) => {
   const {
     resumeText,
     jobDescription,
@@ -60,6 +108,8 @@ app.post('/api/analyze-resume', async (req, res) => {
   if (!resumeText || !jobDescription) {
     return res.status(400).json({ error: 'Both resume text and job description are required.' });
   }
+
+  let finalAnalysis: any = null;
 
   // Attempt Gemini AI analysis first; seamlessly fall back to algorithmic engine on 503/timeout
   try {
@@ -99,21 +149,34 @@ Return valid JSON:
 
     const parsed = JSON.parse(rawText);
     if (parsed && typeof parsed.overallScore === 'number' && parsed.keywords) {
-      return res.json(parsed);
+      finalAnalysis = parsed;
     }
   } catch (err: any) {
     console.warn('Gemini API unavailable or timed out, executing high-precision ATS engine:', err.message);
   }
 
-  // Algorithmic ATS fallback (never fails, instant, deterministic)
-  const fallbackResult = computeAlgorithmicATS(
-    resumeText,
-    jobDescription,
-    jobTitle,
-    companyName,
-    experienceLevel
-  );
-  res.json(fallbackResult);
+  // Algorithmic ATS fallback if Gemini did not produce valid output
+  if (!finalAnalysis) {
+    finalAnalysis = computeAlgorithmicATS(
+      resumeText,
+      jobDescription,
+      jobTitle,
+      companyName,
+      experienceLevel
+    );
+  }
+
+  // If a user is logged in, automatically save report under their user account
+  if (req.user) {
+    try {
+      const savedRecord = saveAnalysis(req.user.id, finalAnalysis, jobTitle, companyName);
+      finalAnalysis.savedId = savedRecord.id;
+    } catch (saveErr) {
+      console.error('Failed to auto-save analysis for user:', saveErr);
+    }
+  }
+
+  res.json(finalAnalysis);
 });
 
 // 2. Tailor / Rewrite specific bullet points

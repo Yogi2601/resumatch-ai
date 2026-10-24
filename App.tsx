@@ -15,8 +15,12 @@ import { CoverLetterGenerator } from './components/CoverLetterGenerator.tsx';
 import { InterviewPrepView } from './components/InterviewPrepView.tsx';
 import { HistoryDrawer } from './components/HistoryDrawer.tsx';
 import { PrintReportView } from './components/PrintReportView.tsx';
+import { ProjectReportModal } from './components/ProjectReportModal.tsx';
+import { AuthModal } from './components/AuthModal.tsx';
+import { AdminDashboard } from './components/AdminDashboard.tsx';
+import { LandingPage } from './components/LandingPage.tsx';
 import { SAMPLE_PRESETS } from './data/samplePresets.ts';
-import type { ATSAnalysisResult } from './types.ts';
+import type { ATSAnalysisResult, User } from './types.ts';
 import {
   AlertCircle,
   Sparkles,
@@ -27,9 +31,12 @@ import {
   FileCheck2,
   SlidersHorizontal,
   BookOpenCheck,
+  Shield,
 } from 'lucide-react';
 
 const LOCAL_STORAGE_KEY = 'resumatch_ai_history_v1';
+const AUTH_TOKEN_KEY = 'resumatch_auth_token_v1';
+const AUTH_USER_KEY = 'resumatch_auth_user_v1';
 
 export default function App() {
   // Pre-fill with the first sample preset so users see high-value immediate demo
@@ -51,19 +58,164 @@ export default function App() {
 
   const [selectedBulletForOptimizer, setSelectedBulletForOptimizer] = useState<string>('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isProjectReportOpen, setIsProjectReportOpen] = useState(false);
   const [historyList, setHistoryList] = useState<ATSAnalysisResult[]>([]);
 
-  // Load history from localStorage on mount
+  // Authentication & Admin State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
+  const [isAdminConsoleOpen, setIsAdminConsoleOpen] = useState(false);
+
+  // Navigation / Page View: 'landing' (public homepage) or 'dashboard' (ATS checker)
+  // Public homepage is the first page visitors see (Requirement 1 & 2)
+  const [currentPage, setCurrentPage] = useState<'landing' | 'dashboard'>(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#', '');
+      const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+      if (hash === 'dashboard' && storedToken) {
+        return 'dashboard';
+      }
+    }
+    return 'landing';
+  });
+
+  // Guard dashboard access from direct URL changes (Requirement 3)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (hash === 'dashboard') {
+        const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+        if (storedToken) {
+          setCurrentPage('dashboard');
+        } else {
+          // Unauthenticated users are redirected to landing with login modal
+          setCurrentPage('landing');
+          setAuthModalMode('login');
+          setIsAuthModalOpen(true);
+          setError('Please sign in to access the ATS Checker Dashboard.');
+        }
+      } else if (hash === '' || hash === 'home' || hash === 'features' || hash === 'about') {
+        setCurrentPage('landing');
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const navigateToDashboard = () => {
+    const storedToken = token || localStorage.getItem(AUTH_TOKEN_KEY);
+    if (storedToken) {
+      setCurrentPage('dashboard');
+      window.location.hash = 'dashboard';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setAuthModalMode('login');
+      setIsAuthModalOpen(true);
+    }
+  };
+
+  const navigateToHome = () => {
+    setCurrentPage('landing');
+    window.location.hash = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Restore authenticated session and isolated history on mount
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (stored) {
-        setHistoryList(JSON.parse(stored));
+      const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+      const storedUser = localStorage.getItem(AUTH_USER_KEY);
+
+      if (storedToken && storedUser) {
+        setToken(storedToken);
+        const parsedUser = JSON.parse(storedUser);
+        setCurrentUser(parsedUser);
+
+        // Fetch fresh profile and user's isolated analyses
+        fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${storedToken}` },
+        })
+          .then((res) => {
+            if (res.ok) return res.json();
+            throw new Error('Session expired');
+          })
+          .then((data) => {
+            if (data.user) {
+              setCurrentUser(data.user);
+              localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+              fetchUserIsolatedAnalyses(storedToken);
+            }
+          })
+          .catch(() => {
+            // Token expired, clear session
+            handleLogout();
+          });
+      } else {
+        // Fallback guest history
+        const guestHistory = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (guestHistory) {
+          setHistoryList(JSON.parse(guestHistory));
+        }
       }
     } catch (e) {
-      console.error('Failed to load history from localStorage', e);
+      console.error('Failed to restore auth session:', e);
     }
   }, []);
+
+  // Fetch only this user's isolated analyses from server (Requirement 5)
+  const fetchUserIsolatedAnalyses = async (userToken: string) => {
+    try {
+      const response = await fetch('/api/user/analyses', {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data.analyses)) {
+          const formattedList = data.analyses.map((rec: any) => ({
+            ...rec.analysis,
+            id: rec.id,
+            timestamp: new Date(rec.createdAt).getTime(),
+            jobTitle: rec.jobTitle,
+            companyName: rec.companyName,
+          }));
+          setHistoryList(formattedList);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching user analyses:', err);
+    }
+  };
+
+  const handleAuthSuccess = (user: User, authToken: string) => {
+    setCurrentUser(user);
+    setToken(authToken);
+    localStorage.setItem(AUTH_TOKEN_KEY, authToken);
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+
+    // Redirect user to ATS Checker Dashboard upon successful auth (Requirement 2)
+    setCurrentPage('dashboard');
+    window.location.hash = 'dashboard';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Fetch this user's isolated reports immediately
+    fetchUserIsolatedAnalyses(authToken);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setToken(null);
+    setIsAdminConsoleOpen(false);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+    // Clear history view to prevent leaking previous user data
+    setHistoryList([]);
+    setCurrentPage('landing');
+    window.location.hash = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Shared scan runner
   const runScan = async (
@@ -83,9 +235,14 @@ export default function App() {
     setError(null);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/analyze-resume', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           resumeText: rText,
           jobDescription: jdText,
@@ -104,21 +261,27 @@ export default function App() {
       setAnalysis(result);
 
       if (saveHistory) {
-        try {
-          const itemToSave = {
-            ...result,
-            id: 'analysis-' + Date.now(),
-            timestamp: Date.now(),
-            jobTitle: rTitle || 'Target Role',
-            companyName: rCompany || 'Company',
-          };
-          setHistoryList((prev) => {
-            const updated = [itemToSave, ...prev.slice(0, 19)];
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
-            return updated;
-          });
-        } catch (e) {
-          console.error('Failed to save analysis to history', e);
+        if (token) {
+          // If authenticated, refresh isolated user history from server
+          fetchUserIsolatedAnalyses(token);
+        } else {
+          // Guest fallback
+          try {
+            const itemToSave = {
+              ...result,
+              id: 'analysis-' + Date.now(),
+              timestamp: Date.now(),
+              jobTitle: rTitle || 'Target Role',
+              companyName: rCompany || 'Company',
+            };
+            setHistoryList((prev) => {
+              const updated = [itemToSave, ...prev.slice(0, 19)];
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+              return updated;
+            });
+          } catch (e) {
+            console.error('Failed to save analysis to history', e);
+          }
         }
       }
     } catch (err: any) {
@@ -141,12 +304,32 @@ export default function App() {
     );
   }, []);
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
+    if (token) {
+      try {
+        await fetch('/api/user/analyses', {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (e) {
+        console.error('Failed to clear server analyses', e);
+      }
+    }
     setHistoryList([]);
     localStorage.removeItem(LOCAL_STORAGE_KEY);
   };
 
-  const handleDeleteHistoryItem = (id: string) => {
+  const handleDeleteHistoryItem = async (id: string) => {
+    if (token) {
+      try {
+        await fetch(`/api/user/analyses/${id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (e) {
+        console.error('Failed to delete server analysis', e);
+      }
+    }
     const updated = historyList.filter((item) => item.id !== id);
     setHistoryList(updated);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
@@ -216,20 +399,53 @@ export default function App() {
         experienceLevel={experienceLevel}
       />
 
-      {/* Interactive Web App Header */}
-      <Header
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onLoadPreset={handleLoadPreset}
-        onReset={handleReset}
-        onOpenHistory={() => setIsHistoryOpen(true)}
-        onPrintReport={handlePrintReport}
-        hasAnalysis={!!analysis}
-        historyCount={historyList.length}
-      />
+      {currentPage === 'landing' ? (
+        /* 1. PUBLIC HOMEPAGE (Requirement 1 & 2) */
+        <LandingPage
+          currentUser={currentUser}
+          onOpenAuth={(mode = 'login') => {
+            setAuthModalMode(mode);
+            setIsAuthModalOpen(true);
+          }}
+          onGoToDashboard={navigateToDashboard}
+          onOpenProjectReport={() => setIsProjectReportOpen(true)}
+        />
+      ) : (
+        /* 2. AUTHENTICATED ATS CHECKER DASHBOARD (Requirement 3) */
+        <>
+          {/* Interactive Web App Header */}
+          <Header
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            onLoadPreset={handleLoadPreset}
+            onReset={handleReset}
+            onOpenHistory={() => setIsHistoryOpen(true)}
+            onOpenProjectReport={() => setIsProjectReportOpen(true)}
+            onPrintReport={handlePrintReport}
+            hasAnalysis={!!analysis}
+            historyCount={historyList.length}
+            currentUser={currentUser}
+            onOpenAuth={(mode = 'login') => {
+              setAuthModalMode(mode);
+              setIsAuthModalOpen(true);
+            }}
+            onLogout={handleLogout}
+            onOpenAdmin={() => setIsAdminConsoleOpen(!isAdminConsoleOpen)}
+            isAdminOpen={isAdminConsoleOpen}
+            onGoToHome={navigateToHome}
+          />
 
-      {/* Main Container */}
+          {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7 print:hidden">
+        {/* Administrator Command Console (Requirement 4 & 5) */}
+        {isAdminConsoleOpen && currentUser?.role === 'admin' && (
+          <AdminDashboard
+            currentUser={currentUser}
+            token={token}
+            onClose={() => setIsAdminConsoleOpen(false)}
+          />
+        )}
+
         {/* Error Notification */}
         {error && (
           <div className="mb-6 p-4 bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 rounded-2xl text-rose-800 text-sm flex items-start gap-3 shadow-sm">
@@ -446,6 +662,8 @@ export default function App() {
           </div>
         </div>
       </main>
+        </>
+      )}
 
       {/* History Drawer */}
       <HistoryDrawer
@@ -455,6 +673,20 @@ export default function App() {
         onSelectAnalysis={handleSelectHistoryItem}
         onClearHistory={handleClearHistory}
         onDeleteHistoryItem={handleDeleteHistoryItem}
+      />
+
+      {/* Project Report & Technical Showcase Modal */}
+      <ProjectReportModal
+        isOpen={isProjectReportOpen}
+        onClose={() => setIsProjectReportOpen(false)}
+      />
+
+      {/* Authentication Modal (Sign In & Sign Up) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authModalMode}
+        onAuthSuccess={handleAuthSuccess}
       />
     </div>
   );

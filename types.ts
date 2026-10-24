@@ -115,3 +115,42 @@ export interface SamplePreset {
   resumeText: string;
   jobDescription: string;
 }
+
+export interface User {
+  id: string;
+  fullName: string;
+  username: string;
+  email: string;
+  role: 'user' | 'admin';
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+export interface AdminUser {
+  id: string;
+  fullName: string;
+  username: string;
+  email: string;
+  role: 'user' | 'admin';
+  createdAt: string;
+  lastLoginAt?: string;
+  scansCount: number;
+}
+
+export interface PlatformMetrics {
+  totalUsers: number;
+  totalScans: number;
+  adminUsers: number;
+  averageScore: number;
+  recentScans: Array<{
+    id: string;
+    userName: string;
+    username: string;
+    jobTitle: string;
+    companyName: string;
+    overallScore: number;
+    verdict: string;
+    createdAt: string;
+  }>;
+}
+
