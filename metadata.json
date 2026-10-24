@@ -1,0 +1,6 @@
+{
+  "name": "ResuMatch AI - Resume & Job Description ATS Checker",
+  "description": "Intelligent AI-powered ATS resume checker and job description match analyzer with gap scoring, keyword insights, bullet point optimizer, and tailored interview prep.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
