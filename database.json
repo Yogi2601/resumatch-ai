@@ -1,0 +1,80 @@
+{
+  "users": [
+    {
+      "id": "admin-master-001",
+      "fullName": "Yogeshwari Salunkhe (Administrator)",
+      "username": "admin",
+      "email": "yogeshwarisalunkhe2003@gmail.com",
+      "passwordHash": "$2b$10$9iP1XXMVxmsHJXe1EgNhUODFBnnHt79Cuvvk3PutmQjV0J8OtHgQC",
+      "role": "admin",
+      "createdAt": "2026-10-24T10:33:45.492Z",
+      "lastLoginAt": "2026-10-24T10:37:44.565Z"
+    },
+    {
+      "id": "user-1792838038804-xp17os",
+      "fullName": "Jane Doe",
+      "username": "janedoe",
+      "email": "jane@example.com",
+      "passwordHash": "$2b$10$Zp2TvSjl5fDyH2CP8/dq0OIHzViNUsP2A00UuLGp9S4rwiQ2bDxyC",
+      "role": "user",
+      "createdAt": "2026-10-24T10:33:58.804Z",
+      "lastLoginAt": "2026-10-24T10:34:08.422Z"
+    },
+    {
+      "id": "user-1792838048543-zlpvgp",
+      "fullName": "Bob Smith",
+      "username": "bobsmith",
+      "email": "bob@example.com",
+      "passwordHash": "$2b$10$5RMaJTcfyaMH0Uy09aPayOz7CSctidkht1qyxc4uzF0fwL3mGByWO",
+      "role": "user",
+      "createdAt": "2026-10-24T10:34:08.543Z"
+    },
+    {
+      "id": "user-1792838263845-hcbyzg",
+      "fullName": "Hacker User",
+      "username": "hacker123",
+      "email": "hacker@example.com",
+      "passwordHash": "$2b$10$p.YOHPAcSSFlxRzeEOM1DuwUu8UUpfjSXfcRosIkeKukfuDPcYeDu",
+      "role": "user",
+      "createdAt": "2026-10-24T10:37:43.845Z"
+    },
+    {
+      "id": "user-1792838263963-5q8t22",
+      "fullName": "David Clark",
+      "username": "davidclark",
+      "email": "david.clark@workmail.com",
+      "passwordHash": "$2b$10$xM5K4Rm0k5I1/F/MSU9P0O3ZAv0S0H3ArAVRlcJK.jxJmanjFevMW",
+      "role": "user",
+      "createdAt": "2026-10-24T10:37:43.963Z",
+      "lastLoginAt": "2026-10-24T10:37:44.224Z"
+    }
+  ],
+  "analyses": [
+    {
+      "id": "analysis-1792838264344-a1cje",
+      "userId": "user-1792838263963-5q8t22",
+      "jobTitle": "Principal Architect",
+      "companyName": "Google",
+      "overallScore": 92,
+      "verdict": "Exceptional Match",
+      "analysis": {
+        "overallScore": 92,
+        "verdict": "Exceptional Match"
+      },
+      "createdAt": "2026-10-24T10:37:44.344Z"
+    },
+    {
+      "id": "analysis-1792838048548-0bg8y",
+      "userId": "user-1792838038804-xp17os",
+      "jobTitle": "Senior Engineer",
+      "companyName": "Stripe",
+      "overallScore": 85,
+      "verdict": "Strong Match",
+      "analysis": {
+        "overallScore": 85,
+        "verdict": "Strong Match"
+      },
+      "createdAt": "2026-10-24T10:34:08.548Z"
+    }
+  ]
+}
